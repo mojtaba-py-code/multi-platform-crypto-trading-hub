@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Crypto Trading Hub</title>
+  <!-- {{CSP_NONCE}} is substituted per response by the /dashboard route; the
+       page is served under a strict nonce-based Content-Security-Policy, so no
+       inline event-handler attributes (onclick=…) may be used here. -->
+  <style nonce="{{CSP_NONCE}}">
+    :root {
+      --bg: #0b0e14; --panel: #151a23; --panel-2: #1c2431; --border: #26303f;
+      --text: #e6edf3; --muted: #8b98a9; --accent: #3b82f6; --green: #22c55e;
+      --red: #ef4444; --radius: 12px;
+    }
+    :root[data-theme="light"] {
+      --bg: #f5f7fa; --panel: #ffffff; --panel-2: #eef2f7; --border: #d7dee8;
+      --text: #0b0e14; --muted: #5a6675; --accent: #2563eb;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg); color: var(--text); line-height: 1.5;
+    }
+    header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 22px; border-bottom: 1px solid var(--border); background: var(--panel);
+      position: sticky; top: 0; z-index: 10;
+    }
+    header h1 { font-size: 17px; margin: 0; letter-spacing: .2px; }
+    header .badge {
+      font-size: 11px; padding: 2px 8px; border-radius: 999px; margin-left: 8px;
+      background: var(--panel-2); color: var(--muted); border: 1px solid var(--border);
+    }
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 22px; }
+    .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+    .card {
+      background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 18px;
+    }
+    .card h2 { margin: 0 0 12px; font-size: 14px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); }
+    label { display: block; font-size: 12px; color: var(--muted); margin: 8px 0 4px; }
+    input, select, button {
+      width: 100%; padding: 9px 11px; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--panel-2); color: var(--text); font-size: 14px;
+    }
+    button {
+      background: var(--accent); border: none; color: white; cursor: pointer; font-weight: 600;
+      margin-top: 12px; transition: opacity .15s;
+    }
+    button:hover { opacity: .9; }
+    button.ghost { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); }
+    .row { display: flex; gap: 10px; }
+    .row > * { flex: 1; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--border); }
+    th { color: var(--muted); font-weight: 600; }
+    .pill { padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+    .pill.filled { background: rgba(34,197,94,.15); color: var(--green); }
+    .pill.open { background: rgba(59,130,246,.15); color: var(--accent); }
+    .pill.paper { background: rgba(139,152,169,.15); color: var(--muted); }
+    .muted { color: var(--muted); font-size: 12px; }
+    .toast {
+      position: fixed; bottom: 18px; right: 18px; background: var(--panel-2);
+      border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px;
+      max-width: 340px; font-size: 13px; opacity: 0; transform: translateY(8px);
+      transition: all .2s; pointer-events: none;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    .toast.err { border-color: var(--red); color: var(--red); }
+    .hidden { display: none !important; }
+    .scroll { overflow-x: auto; }
+    .stat { font-size: 22px; font-weight: 700; }
+    a { color: var(--accent); }
+    /* A nonce cannot whitelist style="..." attributes, so every bit of layout
+       lives here in the nonced stylesheet instead. */
+    .toolbar { width: auto; gap: 8px; }
+    .toolbar button { width: auto; margin: 0; }
+    .grid.stacked { margin-top: 16px; }
+    .card.full { grid-column: 1 / -1; }
+  </style>
+</head>
+<body>
+  <header>
+    <div><h1>⬡ Crypto Trading Hub <span class="badge" id="modeBadge">paper</span></h1></div>
+    <div class="row toolbar">
+      <button class="ghost" id="themeBtn">◐ Theme</button>
+      <button class="ghost" id="logoutBtn">Logout</button>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <!-- Auth panel -->
+    <div id="authView" class="grid">
+      <div class="card">
+        <h2>Sign in</h2>
+        <label>Email</label>
+        <input id="loginEmail" type="email" value="trader@example.com" />
+        <label>Password</label>
+        <input id="loginPass" type="password" value="sup3r-secret-pw" />
+        <label>2FA code (if enabled)</label>
+        <input id="loginTotp" placeholder="optional" />
+        <button id="loginBtn">Login</button>
+        <button class="ghost" id="registerBtn">Register a new account</button>
+        <p class="muted" id="authHint">Tip: register once, then log in. Trading is simulated (paper) by default.</p>
+      </div>
+      <div class="card">
+        <h2>Supported exchanges</h2>
+        <div class="scroll"><table id="exchTable"><thead><tr><th>Exchange</th><th>Futures</th><th>Testnet</th></tr></thead><tbody></tbody></table></div>
+      </div>
+    </div>
+
+    <!-- App panel -->
+    <div id="appView" class="hidden">
+      <div class="grid">
+        <div class="card">
+          <h2>Create paper account</h2>
+          <label>Exchange</label>
+          <select id="acctExchange"></select>
+          <div class="row">
+            <div><label>Label</label><input id="acctLabel" value="main" /></div>
+            <div><label>Market</label>
+              <select id="acctMarket"><option>spot</option><option>futures</option><option>margin</option></select>
+            </div>
+          </div>
+          <button id="createAccountBtn">Create account</button>
+        </div>
+
+        <div class="card">
+          <h2>Place order</h2>
+          <label>Account</label>
+          <select id="ordAccount"></select>
+          <div class="row">
+            <div><label>Symbol</label><input id="ordSymbol" value="BTC/USDT" /></div>
+            <div><label>Side</label><select id="ordSide"><option>buy</option><option>sell</option></select></div>
+          </div>
+          <div class="row">
+            <div><label>Type</label><select id="ordType"><option>market</option><option>limit</option></select></div>
+            <div><label>Amount</label><input id="ordAmount" value="0.01" /></div>
+          </div>
+          <div id="priceWrap" class="hidden"><label>Limit price</label><input id="ordPrice" value="60000" /></div>
+          <button id="placeOrderBtn">Submit order</button>
+        </div>
+
+        <div class="card">
+          <h2>Risk calculator</h2>
+          <div class="row">
+            <div><label>Balance</label><input id="rcBal" value="10000" /></div>
+            <div><label>Risk %</label><input id="rcRisk" value="0.01" /></div>
+          </div>
+          <div class="row">
+            <div><label>Entry</label><input id="rcEntry" value="100" /></div>
+            <div><label>Stop</label><input id="rcStop" value="95" /></div>
+            <div><label>Target</label><input id="rcTarget" value="115" /></div>
+          </div>
+          <button id="calcRiskBtn">Calculate</button>
+          <p id="rcOut" class="muted"></p>
+        </div>
+      </div>
+
+      <div class="grid stacked">
+        <div class="card full">
+          <h2>Recent orders</h2>
+          <div class="scroll"><table id="ordersTable">
+            <thead><tr><th>Symbol</th><th>Side</th><th>Type</th><th>Amount</th><th>Avg</th><th>Status</th><th>Mode</th></tr></thead>
+            <tbody></tbody>
+          </table></div>
+          <button class="ghost" id="refreshOrdersBtn">Refresh</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script nonce="{{CSP_NONCE}}">
+    const API = "/api/v1";
+    let token = localStorage.getItem("cth_token") || null;
+
+    function toast(msg, isErr) {
+      const t = document.getElementById("toast");
+      t.textContent = msg; t.className = "toast show" + (isErr ? " err" : "");
+      setTimeout(() => t.className = "toast", 3200);
+    }
+    function toggleTheme() {
+      const r = document.documentElement;
+      r.dataset.theme = r.dataset.theme === "dark" ? "light" : "dark";
+    }
+    // Escape any server/user-derived string before putting it in the DOM.
+    const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+    async function api(path, opts = {}) {
+      opts.headers = Object.assign({ "Content-Type": "application/json" }, opts.headers || {});
+      if (token) opts.headers["Authorization"] = "Bearer " + token;
+      const res = await fetch(API + path, opts);
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body?.error?.message || res.statusText);
+      return body;
+    }
+
+    async function loadExchanges() {
+      const data = await api("/exchanges");
+      const tb = document.querySelector("#exchTable tbody");
+      const sel = document.getElementById("acctExchange");
+      tb.innerHTML = ""; if (sel) sel.innerHTML = "";
+      data.exchanges.forEach(e => {
+        tb.insertAdjacentHTML("beforeend",
+          `<tr><td>${esc(e.name)}</td><td>${e.supports_futures ? "✓" : "—"}</td><td>${e.has_testnet ? "✓" : "—"}</td></tr>`);
+        if (sel) sel.insertAdjacentHTML("beforeend", `<option value="${esc(e.id)}">${esc(e.name)}</option>`);
+      });
+    }
+    async function loadReady() {
+      try { const r = await api("/ready"); document.getElementById("modeBadge").textContent = r.live_trading_enabled ? "LIVE" : "paper"; } catch {}
+    }
+
+    async function register() {
+      try {
+        await api("/auth/register", { method: "POST", body: JSON.stringify({
+          email: loginEmail.value, password: loginPass.value }) });
+        toast("Registered. You can log in now.");
+      } catch (e) { toast(e.message, true); }
+    }
+    async function login() {
+      try {
+        const body = { email: loginEmail.value, password: loginPass.value };
+        if (loginTotp.value) body.totp_code = loginTotp.value;
+        const r = await api("/auth/login", { method: "POST", body: JSON.stringify(body) });
+        token = r.access_token; localStorage.setItem("cth_token", token);
+        showApp();
+      } catch (e) { toast(e.message, true); }
+    }
+    function logout() { token = null; localStorage.removeItem("cth_token"); showAuth(); }
+
+    function showApp() {
+      document.getElementById("authView").classList.add("hidden");
+      document.getElementById("appView").classList.remove("hidden");
+      document.getElementById("logoutBtn").classList.remove("hidden");
+      loadAccounts(); loadOrders();
+    }
+    function showAuth() {
+      document.getElementById("appView").classList.add("hidden");
+      document.getElementById("authView").classList.remove("hidden");
+      document.getElementById("logoutBtn").classList.add("hidden");
+    }
+
+    async function loadAccounts() {
+      const list = await api("/accounts");
+      const sel = document.getElementById("ordAccount");
+      sel.innerHTML = "";
+      list.forEach(a => sel.insertAdjacentHTML("beforeend",
+        `<option value="${esc(a.id)}">${esc(a.exchange_id)} · ${esc(a.label)} (${esc(a.market_type)})</option>`));
+      if (!list.length) toast("Create a paper account to start trading.");
+    }
+    async function createAccount() {
+      try {
+        await api("/accounts/paper", { method: "POST", body: JSON.stringify({
+          exchange_id: acctExchange.value, label: acctLabel.value, market_type: acctMarket.value }) });
+        toast("Account created."); loadAccounts();
+      } catch (e) { toast(e.message, true); }
+    }
+    function togglePrice() {
+      document.getElementById("priceWrap").classList.toggle("hidden", ordType.value !== "limit");
+    }
+    async function placeOrder() {
+      try {
+        const body = { account_id: ordAccount.value, symbol: ordSymbol.value,
+          side: ordSide.value, type: ordType.value, amount: ordAmount.value };
+        if (ordType.value === "limit") body.price = ordPrice.value;
+        await api("/trading/orders", { method: "POST", body: JSON.stringify(body) });
+        toast("Order submitted."); loadOrders();
+      } catch (e) { toast(e.message, true); }
+    }
+    async function loadOrders() {
+      try {
+        const r = await api("/trading/orders?page=1&page_size=25");
+        const tb = document.querySelector("#ordersTable tbody"); tb.innerHTML = "";
+        r.items.forEach(o => {
+          const cls = o.status === "filled" ? "filled" : "open";
+          tb.insertAdjacentHTML("beforeend", `<tr>
+            <td>${esc(o.symbol)}</td><td>${esc(o.side)}</td><td>${esc(o.type)}</td>
+            <td>${esc(o.amount)}</td><td>${esc(o.average ?? "—")}</td>
+            <td><span class="pill ${cls}">${esc(o.status)}</span></td>
+            <td><span class="pill paper">${o.is_paper ? "paper" : "live"}</span></td></tr>`);
+        });
+        if (!r.items.length) tb.innerHTML = `<tr><td colspan="7" class="muted">No orders yet.</td></tr>`;
+      } catch (e) { toast(e.message, true); }
+    }
+    async function calcRisk() {
+      try {
+        const r = await api("/analytics/risk/position-size", { method: "POST", body: JSON.stringify({
+          account_balance: rcBal.value, risk_per_trade: rcRisk.value, entry_price: rcEntry.value,
+          stop_loss_price: rcStop.value, take_profit_price: rcTarget.value, leverage: "1" }) });
+        rcOut.innerHTML = `Quantity <b>${(+r.quantity).toFixed(4)}</b> · Notional <b>${(+r.notional).toFixed(2)}</b> · R:R <b>${r.risk_reward_ratio ? (+r.risk_reward_ratio).toFixed(2) : "—"}</b>`;
+      } catch (e) { toast(e.message, true); }
+    }
+
+    // Boot — handlers are bound here rather than via onclick= attributes,
+    // which the page's nonce-based CSP does not permit.
+    const bind = (id, event, handler) =>
+      document.getElementById(id).addEventListener(event, handler);
+    bind("themeBtn", "click", toggleTheme);
+    bind("logoutBtn", "click", logout);
+    bind("loginBtn", "click", login);
+    bind("registerBtn", "click", register);
+    bind("createAccountBtn", "click", createAccount);
+    bind("ordType", "change", togglePrice);
+    bind("placeOrderBtn", "click", placeOrder);
+    bind("calcRiskBtn", "click", calcRisk);
+    bind("refreshOrdersBtn", "click", loadOrders);
+
+    loadExchanges(); loadReady();
+    if (token) showApp(); else showAuth();
+  </script>
+</body>
+</html>
