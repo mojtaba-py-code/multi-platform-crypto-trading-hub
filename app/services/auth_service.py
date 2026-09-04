@@ -60,6 +60,22 @@ class AuthService:
         self._token_store = token_store
         self._throttle = throttle
 
+    async def _commit_security_event(self) -> None:
+        """Persist an audit row that accompanies a rejected request.
+
+        The request-scoped unit of work rolls back whenever the handler raises.
+        For business writes that is exactly right; for the audit trail it is
+        exactly wrong, because the events most worth recording — a failed
+        login, a lockout, a reused refresh token — are precisely the ones that
+        end in an exception. Without this the log would fill up with successes
+        and contain no trace of anything an investigator would go looking for.
+
+        Committing here is safe because these paths reach it having written
+        nothing but the audit entry and, for token reuse, the revocation that
+        must outlive the rejection too.
+        """
+        await self._audit.session.commit()
+
     async def register(self, *, email: str, password: str) -> User:
         email = email.lower()
         if await self._users.email_exists(email):
@@ -82,6 +98,7 @@ class AuthService:
         # distributed guessing campaign cannot keep trying a single account.
         if await self._throttle.is_locked(email):
             await self._audit.record(action="auth.locked_out", ip_address=ip)
+            await self._commit_security_event()
             raise AccountLockedError(
                 details={"retry_after": await self._throttle.retry_after(email)}
             )
@@ -97,12 +114,23 @@ class AuthService:
             await self._hasher.verify_async(decoy, password)
             await self._throttle.record_failure(email)
             await self._audit.record(action="auth.login_failed", ip_address=ip)
+            await self._commit_security_event()
             raise AuthenticationError("Invalid email or password.")
         if not await self._hasher.verify_async(user.password_hash, password):
             await self._throttle.record_failure(email)
             await self._audit.record(action="auth.login_failed", user_id=user.id, ip_address=ip)
+            await self._commit_security_event()
             raise AuthenticationError("Invalid email or password.")
         if not user.is_active:
+            # Counted and audited like any other failure. The message stays
+            # distinct — someone whose access was revoked needs to know why
+            # rather than hunting for a typo — but without the counter a
+            # disabled account would be an unthrottled oracle for checking
+            # passwords, and without the audit entry the attempt leaves no
+            # trace at all.
+            await self._throttle.record_failure(email)
+            await self._audit.record(action="auth.login_disabled", user_id=user.id, ip_address=ip)
+            await self._commit_security_event()
             raise AuthenticationError("This account is disabled.")
 
         if user.totp_enabled:
@@ -113,6 +141,7 @@ class AuthService:
             except AuthenticationError:
                 await self._throttle.record_failure(email)
                 await self._audit.record(action="auth.2fa_failed", user_id=user.id, ip_address=ip)
+                await self._commit_security_event()
                 raise
 
         # Success — clear the failure counter and any lock.
@@ -123,19 +152,57 @@ class AuthService:
             user.password_hash = await self._hasher.hash_async(password)
 
         await self._audit.record(action="auth.login", user_id=user.id, ip_address=ip)
-        return self._tokens.issue_pair(subject=user.id, role=user.role)
+        return self._tokens.issue_pair(
+            subject=user.id, role=user.role, generation=user.token_generation
+        )
 
     async def refresh(self, refresh_token: str) -> TokenPair:
-        """Rotate a refresh token: verify, one-time-use invalidate, reissue."""
+        """Rotate a refresh token: verify, one-time-use invalidate, reissue.
+
+        Rotation alone stops a stolen token being replayed, but not the theft
+        itself: whoever gets to the token first exchanges it and walks away
+        with a valid new pair, and the loser of that race just sees one failed
+        refresh. So a second use is treated as proof of compromise and every
+        session for the user is dropped — including the pair the thief just
+        minted. The cost of a false positive (a client retrying after a lost
+        response) is one extra login.
+        """
         claims = self._tokens.decode(refresh_token, expected_type="refresh")
-        if await self._token_store.is_revoked(claims.jti):
-            raise AuthenticationError("This refresh token has been revoked.")
         user = await self._users.get(claims.subject)
         if user is None or not user.is_active:
             raise AuthenticationError("User no longer active.")
+
+        if await self._token_store.is_revoked(claims.jti):
+            await self._invalidate_sessions(user, reason="refresh_token_reuse")
+            await self._commit_security_event()
+            raise AuthenticationError("This refresh token has been revoked.")
+
+        if claims.generation < user.token_generation:
+            raise AuthenticationError("This session has been invalidated.")
+
         # Invalidate the presented refresh token so it cannot be replayed.
         await self._token_store.revoke(claims.jti, ttl_seconds=_remaining_ttl(claims.expires_at))
-        return self._tokens.issue_pair(subject=user.id, role=user.role)
+        return self._tokens.issue_pair(
+            subject=user.id, role=user.role, generation=user.token_generation
+        )
+
+    async def _invalidate_sessions(self, user: User, *, reason: str) -> None:
+        """Reject every refresh token issued to ``user`` so far.
+
+        Bumping the counter is exact: tokens minted before the bump carry the
+        old generation and are refused, and the next login mints tokens at the
+        new one. Nothing hinges on clock resolution.
+
+        Access tokens already in circulation are deliberately left alone. They
+        are short-lived by design, and enforcing the generation on every
+        request would put a database read in front of every endpoint — which
+        is the cost this counter exists to avoid.
+        """
+        user.token_generation += 1
+        log.warning("sessions_invalidated", user_id=user.id, reason=reason)
+        await self._audit.record(
+            action="auth.sessions_invalidated", user_id=user.id, detail={"reason": reason}
+        )
 
     async def logout(self, refresh_token: str) -> None:
         """Revoke a refresh token so the session cannot be renewed."""

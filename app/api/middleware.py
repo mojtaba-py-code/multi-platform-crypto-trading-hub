@@ -5,12 +5,14 @@ from __future__ import annotations
 import time
 import uuid
 from collections import defaultdict, deque
+from collections.abc import Iterable
 
 import structlog
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
+from app.api.client_address import resolve_client_ip
 from app.core.exceptions import RateLimitError
 
 log = structlog.get_logger(__name__)
@@ -54,19 +56,26 @@ class InMemoryRateLimiter(BaseHTTPMiddleware):
     while still demonstrating the control.
     """
 
-    def __init__(self, app, *, limit_per_minute: int = 120) -> None:
+    def __init__(
+        self, app, *, limit_per_minute: int = 120, exempt_paths: Iterable[str] | None = None
+    ) -> None:
         super().__init__(app)
         self._limit = limit_per_minute
         self._window = 60.0
         self._hits: dict[str, deque[float]] = defaultdict(deque)
         self._last_sweep = 0.0
-        # Paths that must never be rate limited (health checks / probes).
-        self._exempt = {"/api/v1/health", "/api/v1/ready", "/metrics"}
+        # Paths that must never be rate limited (health checks / probes). The
+        # API prefix is configurable, so these are passed in rather than
+        # hardcoded — otherwise changing the prefix silently starts throttling
+        # the orchestrator's liveness probe.
+        self._exempt = set(exempt_paths or ())
 
     async def dispatch(self, request: Request, call_next):
         if request.url.path in self._exempt:
             return await call_next(request)
-        client = request.client.host if request.client else "unknown"
+        # The peer address is the proxy's when one is in front; without this
+        # every user would share a single bucket. See ``client_address``.
+        client = resolve_client_ip(request) or "unknown"
         now = time.monotonic()
         bucket = self._hits[client]
         while bucket and now - bucket[0] > self._window:

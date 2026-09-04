@@ -30,6 +30,18 @@ the controls and the threat model they address.
   via a revocation store, and **logout** revokes the refresh token so a stolen
   copy cannot renew the session. The store is in-process by default and
   Redis-backed (shared across replicas) when `USE_REDIS_AUTH_STORE=true`.
+- **Refresh-token reuse detection**: rotation alone does not help the victim of
+  a theft — whoever presents the token first wins the race and leaves with a
+  valid new pair, while the other party sees one failed refresh and simply logs
+  in again. So a *second* use of an already-rotated token is treated as proof
+  the token leaked, and **every outstanding session for that user is dropped**,
+  including the pair the thief just minted. This is a per-user generation
+  counter (`users.token_generation`) carried in each token rather than a
+  timestamp: `iat` has one-second resolution, so a timestamp watermark would
+  either miss a token minted in the same second or permanently reject the next
+  login's. Access tokens already issued are deliberately not re-checked — they
+  are short-lived, and enforcing this per request would put a database read in
+  front of every endpoint.
 - **Brute-force protection**: a per-account throttle locks an identity after
   `LOGIN_MAX_ATTEMPTS` failed password/2FA attempts for `LOGIN_LOCKOUT_SECONDS`
   (returns `429` with `Retry-After`), defending against distributed guessing
@@ -91,9 +103,16 @@ the controls and the threat model they address.
 
 ## Auditing & logging
 
-- Security-relevant events (register, login, login-failed, 2fa events, account
-  create/delete, order place/cancel) are written to an append-only `audit_logs`
-  table with only non-sensitive context.
+- Security-relevant events (register, login, login-failed, login-to-a-disabled
+  account, lockout, 2fa events, refresh-token reuse, account create/delete,
+  order place/cancel) are written to an append-only `audit_logs` table with only
+  non-sensitive context.
+- Events that accompany a **rejected** request are committed independently of
+  the request transaction. The request-scoped unit of work rolls back whenever a
+  handler raises, which is correct for business writes and exactly wrong here:
+  every event worth investigating — a failed login, a lockout, a reused refresh
+  token — is recorded on a path that ends in an exception, so without this the
+  log would contain successes only.
 - Structured logs (`structlog`) run every event through a **redaction processor**
   that masks known-sensitive keys, so secrets cannot leak even by accident.
 
@@ -113,8 +132,13 @@ the controls and the threat model they address.
   per-IP limit at scale. The auth throttle and refresh denylist already have
   Redis backends — set `USE_REDIS_AUTH_STORE=true` in any multi-replica
   deployment, or each replica grants its own quota of password guesses.
-- The rate limiter keys on the socket peer address, so behind a proxy it must be
-  fronted by one that enforces its own per-client limit (see `deploy/nginx.conf`).
+- Behind a reverse proxy, set **`TRUSTED_PROXY_IPS`** to the proxy's address or
+  range. The rate limiter and the audit trail then read the real client from
+  `X-Forwarded-For`; left unset, both see the proxy, so the whole deployment
+  shares one rate-limit bucket and every audit entry records the proxy. The
+  header is honoured *only* when the peer that opened the connection is listed,
+  and the chain is read from the right — the end the proxy appends to — so a
+  caller cannot forge an address by supplying their own header.
 - A disabled user keeps *access* (not refresh) until the current short-lived
   access token expires, since access tokens are not checked against a store on
   every request.

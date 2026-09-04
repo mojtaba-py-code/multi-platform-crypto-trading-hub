@@ -42,6 +42,8 @@ dev = [
     # workflow files. Installed transitively anyway, but the tests depend on it
     # directly, so it is declared directly.
     "pyyaml>=6.0",
+    # Regenerates the requirements.txt lock; see the header of that file.
+    "uv>=0.4",
 ]
 
 [tool.setuptools.packages.find]

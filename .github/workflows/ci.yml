@@ -115,6 +115,12 @@ jobs:
       - name: Audit installed packages (pip-audit)
         run: pip-audit --strict --progress-spinner off
 
+      # The environment above is resolved from the ranges in pyproject.toml.
+      # What actually ships is the pinned lock, so audit that too — a CVE in a
+      # version the lock pins would otherwise be missed entirely.
+      - name: Audit the pinned runtime lock
+        run: pip-audit --strict --progress-spinner off -r requirements.txt
+
   docker:
     name: Docker build
     runs-on: ubuntu-latest

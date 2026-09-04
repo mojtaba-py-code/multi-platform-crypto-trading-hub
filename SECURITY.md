@@ -55,9 +55,9 @@ Detail lives in [`docs/security.md`](docs/security.md); the controls in short:
 | --- | --- |
 | Exchange credentials at rest | Fernet (AES-128-CBC + HMAC-SHA256) with a rotatable master key; plaintext never reaches the database |
 | Passwords | Argon2id (64 MiB, t=3), verified off the event loop, transparent rehash on parameter upgrade |
-| Sessions | Short-lived JWT access tokens; refresh tokens are single-use, rotated, and revocable |
+| Sessions | Short-lived JWT access tokens; refresh tokens are single-use, rotated, and revocable. A reused token is treated as theft and drops every session for that user |
 | Two-factor | TOTP with the accepted time step recorded, so a code cannot be replayed |
-| Brute force | Per-account lockout (Redis-backed across replicas) plus a per-IP rate limit |
+| Brute force | Per-account lockout (Redis-backed across replicas) plus a per-IP rate limit that reads the real client address behind a configured proxy |
 | Accidental disclosure | Structured logging redacts known-sensitive keys; credential objects have a scrubbing `__repr__`; 500s never return internals |
 | Unsafe deployment | Production refuses to start without a master key, a ≥32-char JWT secret, `APP_DEBUG=false`, and a non-wildcard CORS allow-list |
 | Live trading | Off by default and enforced at one choke point (`ExchangeFactory`); testnet-first when enabled |
@@ -69,7 +69,9 @@ Every push and pull request runs, and must pass:
 - **gitleaks** over the full commit history and the working tree — a secret that
   was committed and later removed is still in the pack files, so scanning only
   the tip would miss the case that matters. Findings are redacted in the log.
-- **pip-audit** (`--strict`) against the Python Packaging Advisory Database.
+- **pip-audit** (`--strict`) against the Python Packaging Advisory Database, run
+  against both the development environment and the pinned runtime lock that the
+  image actually ships.
 - **CodeQL** (`security-and-quality`) for inter-procedural taint analysis.
 - **ruff** with the `S` (Bandit) ruleset, **mypy**, and the test suite with a
   90% coverage floor.

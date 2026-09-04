@@ -53,6 +53,12 @@ services:
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/1
       CELERY_RESULT_BACKEND: redis://redis:6379/2
+      # nginx terminates the connection, so without this every request would
+      # look like it came from the proxy: one shared rate-limit bucket and an
+      # audit log full of the proxy's address. Compose networks live in
+      # Docker's 172.16/12 range. Narrow this to the proxy's address if you
+      # run untrusted workloads on the same network.
+      TRUSTED_PROXY_IPS: ${TRUSTED_PROXY_IPS:-172.16.0.0/12}
     depends_on:
       db:
         condition: service_healthy

@@ -70,7 +70,15 @@ def create_app() -> FastAPI:
 
     # Middleware is applied in reverse order of addition; request context should
     # be outermost so every response carries a request id and security headers.
-    app.add_middleware(InMemoryRateLimiter, limit_per_minute=settings.rate_limit_per_minute)
+    app.add_middleware(
+        InMemoryRateLimiter,
+        limit_per_minute=settings.rate_limit_per_minute,
+        exempt_paths=(
+            f"{settings.api_v1_prefix}/health",
+            f"{settings.api_v1_prefix}/ready",
+            "/metrics",
+        ),
+    )
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,

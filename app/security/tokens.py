@@ -39,6 +39,11 @@ class TokenClaims:
     token_type: TokenType
     jti: str
     expires_at: datetime
+    # When the token was minted (the ``iat`` claim).
+    issued_at: datetime
+    # The user's token generation at issue time. Lets every outstanding token be
+    # invalidated by bumping one counter, without tracking each jti.
+    generation: int = 0
 
 
 class TokenService:
@@ -60,7 +65,7 @@ class TokenService:
         self._refresh_ttl = refresh_ttl
 
     def _encode(
-        self, *, subject: str, role: str, token_type: TokenType, ttl: timedelta
+        self, *, subject: str, role: str, token_type: TokenType, ttl: timedelta, generation: int
     ) -> tuple[str, datetime]:
         now = datetime.now(UTC)
         expires_at = now + ttl
@@ -69,6 +74,7 @@ class TokenService:
             "role": role,
             "type": token_type,
             "jti": uuid.uuid4().hex,
+            "gen": generation,
             "iat": int(now.timestamp()),
             "nbf": int(now.timestamp()),
             "exp": int(expires_at.timestamp()),
@@ -76,12 +82,20 @@ class TokenService:
         token = jwt.encode(payload, self._secret, algorithm=self._algorithm)
         return token, expires_at
 
-    def issue_pair(self, *, subject: str, role: str) -> TokenPair:
+    def issue_pair(self, *, subject: str, role: str, generation: int = 0) -> TokenPair:
         access, access_exp = self._encode(
-            subject=subject, role=role, token_type="access", ttl=self._access_ttl
+            subject=subject,
+            role=role,
+            token_type="access",
+            ttl=self._access_ttl,
+            generation=generation,
         )
         refresh, _ = self._encode(
-            subject=subject, role=role, token_type="refresh", ttl=self._refresh_ttl
+            subject=subject,
+            role=role,
+            token_type="refresh",
+            ttl=self._refresh_ttl,
+            generation=generation,
         )
         expires_in = int((access_exp - datetime.now(UTC)).total_seconds())
         return TokenPair(access_token=access, refresh_token=refresh, expires_in=expires_in)
@@ -92,7 +106,7 @@ class TokenService:
                 token,
                 self._secret,
                 algorithms=[self._algorithm],
-                options={"require": ["exp", "sub", "type", "jti"]},
+                options={"require": ["exp", "iat", "sub", "type", "jti"]},
             )
         except jwt.ExpiredSignatureError as exc:
             raise InvalidTokenError("Token has expired.") from exc
@@ -109,6 +123,8 @@ class TokenService:
             token_type=token_type,  # type: ignore[arg-type]
             jti=str(payload["jti"]),
             expires_at=datetime.fromtimestamp(payload["exp"], tz=UTC),
+            issued_at=datetime.fromtimestamp(payload["iat"], tz=UTC),
+            generation=int(payload.get("gen", 0)),
         )
 
 

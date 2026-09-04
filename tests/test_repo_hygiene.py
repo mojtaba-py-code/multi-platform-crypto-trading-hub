@@ -16,6 +16,7 @@ exactly why they need a test.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -227,6 +228,70 @@ def test_ci_uses_the_reviewed_gitleaks_config():
         command = str(step.get("run", ""))
         if "gitleaks git" in command or "gitleaks dir" in command:
             assert "--config .gitleaks.toml" in command
+
+
+# --- The runtime lock -------------------------------------------------------
+
+
+def _lock_entries() -> dict[str, str]:
+    """Package name -> pinned version, from requirements.txt."""
+    entries: dict[str, str] = {}
+    for raw in (_ROOT / "requirements.txt").read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        spec = line.split(";", 1)[0].strip()  # drop any environment marker
+        name, _, version = spec.partition("==")
+        entries[re.split(r"\[", name)[0].strip().lower().replace("_", "-")] = version.strip()
+    return entries
+
+
+def test_every_runtime_dependency_is_pinned():
+    """A range here means two builds of the same commit can differ.
+
+    For a service that stores exchange API keys, "it worked last month" has to
+    mean the same bytes, and an unpinned transitive dependency is the usual way
+    a supply-chain compromise arrives.
+    """
+    entries = _lock_entries()
+    assert entries, "requirements.txt has no requirements in it"
+    for name, version in entries.items():
+        assert version, f"{name} is not pinned to an exact version"
+
+
+def test_the_lock_covers_every_declared_runtime_dependency():
+    """Catches adding a dependency to pyproject.toml and forgetting to recompile.
+
+    The app would still run in development, where the range is installed
+    directly, and fail only in the image built from the lock.
+    """
+    import tomllib
+
+    declared = tomllib.loads((_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    locked = _lock_entries()
+    for requirement in declared["project"]["dependencies"]:
+        name = re.split(r"[<>=!\[;]", requirement)[0].strip().lower().replace("_", "-")
+        assert name in locked, (
+            f"'{name}' is declared in pyproject.toml but missing from the lock; "
+            f"run `make lock` to recompile requirements.txt"
+        )
+
+
+def test_the_lock_keeps_platform_markers():
+    """A lock compiled without --universal is wrong on the deployment platform.
+
+    Resolving on Windows drops uvloop, which is marked ``sys_platform !=
+    "win32"``. Nothing fails: the Linux image just quietly runs without it.
+    """
+    text = (_ROOT / "requirements.txt").read_text(encoding="utf-8")
+    assert "uvloop" in text, "uvloop is missing — the lock was not compiled with --universal"
+    assert "sys_platform" in text, "no environment markers survived in the lock"
+
+
+def test_the_dockerfile_installs_from_the_lock():
+    """Installing from pyproject in the image would discard the pinning."""
+    dockerfile = (_ROOT / "Dockerfile").read_text(encoding="utf-8")
+    assert "requirements.txt" in dockerfile
 
 
 def test_dependabot_watches_every_ecosystem_that_ships_code():

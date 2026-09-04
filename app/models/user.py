@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import BigInteger, Boolean, String
+from sqlalchemy import BigInteger, Boolean, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base, TimestampMixin, UUIDPrimaryKey
@@ -29,6 +29,14 @@ class User(UUIDPrimaryKey, TimestampMixin, Base):
     # Highest TOTP time step already accepted for this user. Codes at or below
     # it are refused, making every code single-use (replay protection).
     totp_last_counter: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+
+    # Bumped to invalidate every outstanding refresh token at once. Each token
+    # carries the generation it was minted under and is refused once this moves
+    # past it. A counter rather than a timestamp because ``iat`` only has
+    # one-second resolution: a token issued in the same second as the
+    # revocation would slip through, and tightening the comparison to catch it
+    # would permanently reject the next login's token instead.
+    token_generation: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     accounts: Mapped[list[ExchangeAccount]] = relationship(
         back_populates="user", cascade="all, delete-orphan", lazy="selectin"

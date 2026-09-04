@@ -56,6 +56,12 @@ deployment:
    use a managed Redis with authentication and TLS.
 4. **Prefer managed Postgres and Redis** for anything you cannot afford to lose
    — see §6 and §8.
+5. **Set `TRUSTED_PROXY_IPS`** to whatever sits in front of the API. The compose
+   file already does this for the bundled nginx; behind a cloud load balancer or
+   CDN, use that provider's ranges. Without it the per-IP rate limiter shares one
+   bucket across every user and the audit log records the proxy's address for
+   every login. Never set it to a range you do not control — anything listed is
+   trusted to declare any client address.
 
 ## 3. Database migrations
 

@@ -154,6 +154,7 @@ All configuration is environment-driven and validated at startup
 | `USE_REDIS_AUTH_STORE` | `false` | Share the refresh denylist and login lockout across replicas. Set `true` for multi-replica. |
 | `DATABASE_URL` | postgres… | Async SQLAlchemy DSN. |
 | `RATE_LIMIT_PER_MINUTE` | `120` | Per-IP request budget. |
+| `TRUSTED_PROXY_IPS` | *(empty)* | Proxies allowed to set `X-Forwarded-For`. Set this behind a reverse proxy, or every user shares one rate-limit bucket and the audit log records the proxy. |
 
 In `production`, the app **refuses to start** without a master key, a strong JWT
 secret, `APP_DEBUG=false`, and a CORS allow-list that is not `*`.
@@ -167,6 +168,14 @@ pytest --cov=app --cov-report=term-missing   # tests + coverage
 ruff check alembic app tests                 # lint
 ruff format alembic app tests                # format
 mypy app                                     # type check
+```
+
+Dependencies are declared as ranges in `pyproject.toml` and pinned in
+`requirements.txt`, which is a compiled lock — the Docker image installs from it,
+so a rebuild produces the same code. After changing a dependency:
+
+```bash
+make lock     # uv pip compile pyproject.toml --universal ...
 ```
 
 Database migrations. The v1.0 schema is committed, so a production deploy is
@@ -204,10 +213,11 @@ Full detail in [`docs/security.md`](docs/security.md); reporting policy in
 | --- | --- |
 | Exchange credentials at rest | Fernet (AES-128-CBC + HMAC-SHA256), rotatable master key; plaintext never reaches the database |
 | Passwords | Argon2id (64 MiB, t=3), hashed off the event loop, rehashed transparently on upgrade |
-| Sessions | Short-lived JWT access tokens; refresh tokens single-use, rotated, revocable |
+| Sessions | Short-lived JWT access tokens; refresh tokens single-use, rotated, revocable. Reusing a rotated token is read as theft and drops every session for that user |
 | Two-factor | TOTP with the accepted time step recorded, so a code cannot be replayed |
 | Brute force | Per-account lockout (Redis-backed across replicas) plus a per-IP rate limit |
 | Accidental disclosure | Log processor redacts sensitive keys; credentials have a scrubbing `__repr__`; 500s never leak internals |
+| Audit trail | Failed logins, lockouts and token reuse are committed independently of the rejected request, so the log is not just a list of successes |
 | Unsafe deployment | Production refuses to start without a master key, a ≥ 32-char JWT secret, `APP_DEBUG=false`, and a non-wildcard CORS allow-list |
 | Live trading | Off by default, enforced at one choke point, testnet-first when enabled |
 

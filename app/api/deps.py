@@ -14,6 +14,7 @@ from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.client_address import resolve_client_ip
 from app.core.exceptions import PermissionDeniedError
 from app.database.session import get_session
 from app.exchange.factory import ExchangeFactory, get_exchange_factory
@@ -165,6 +166,10 @@ def require(permission: Permission):
 
 
 def client_ip(request: Request) -> str | None:
-    if request.client:
-        return request.client.host
-    return None
+    """The caller's address for the audit trail.
+
+    Resolved through the trusted-proxy rules, so a deployment behind a reverse
+    proxy records the actual client rather than the proxy on every login,
+    failed login, and lockout.
+    """
+    return resolve_client_ip(request)

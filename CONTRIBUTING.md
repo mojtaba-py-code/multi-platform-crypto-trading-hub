@@ -38,6 +38,14 @@ CI runs all of the above plus a secret scan, a dependency audit, CodeQL, and a
 Docker build. It enforces a **90% coverage floor**; the project currently sits
 at 95%, so please do not spend that headroom without a reason.
 
+If you add or change a dependency, edit the range in `pyproject.toml` and then
+recompile the lock — CI installs the image from `requirements.txt`, and a test
+fails if a declared dependency is missing from it:
+
+```bash
+make lock
+```
+
 If you change a SQLAlchemy model, generate the matching migration — CI runs
 `alembic check` and will fail if the schema and the models have drifted:
 

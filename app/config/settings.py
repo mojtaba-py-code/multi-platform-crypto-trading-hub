@@ -82,7 +82,17 @@ class Settings(BaseSettings):
     )
     rate_limit_per_minute: int = 120
 
-    @field_validator("cors_origins", mode="before")
+    # --- Reverse proxy ---
+    # Addresses or CIDR ranges of proxies allowed to set ``X-Forwarded-For``.
+    # Empty (the default) means the header is ignored and the peer address is
+    # used — correct when the app is reached directly. Set this to your proxy
+    # when one is in front, or the rate limiter shares a single bucket across
+    # every user and the audit log records the proxy for every login.
+    # Anything listed here can claim to be any client, so list only proxies you
+    # operate. See ``app/api/client_address.py``.
+    trusted_proxy_ips: Annotated[list[str], NoDecode] = Field(default_factory=list)
+
+    @field_validator("cors_origins", "trusted_proxy_ips", mode="before")
     @classmethod
     def _split_cors(cls, value: object) -> object:
         """Accept either a comma-separated string or an already-parsed list."""

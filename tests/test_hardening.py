@@ -76,20 +76,71 @@ async def headers(client, register_payload):
 # --- Refresh rotation + logout ---------------------------------------------
 @pytest.mark.asyncio
 async def test_refresh_rotation_invalidates_old_token(client, register_payload):
+    """Each refresh mints a new pair and retires the one presented."""
     tokens = await _register_login(client, register_payload)
     old_refresh = tokens["refresh_token"]
 
     first = await client.post("/api/v1/auth/refresh", json={"refresh_token": old_refresh})
     assert first.status_code == 200
     new_refresh = first.json()["refresh_token"]
+    assert new_refresh != old_refresh
 
-    # Reusing the rotated (old) token must fail.
+    # The token just issued is the live one...
+    live = await client.post("/api/v1/auth/refresh", json={"refresh_token": new_refresh})
+    assert live.status_code == 200
+
+    # ...and the one it replaced is refused.
     replay = await client.post("/api/v1/auth/refresh", json={"refresh_token": old_refresh})
     assert replay.status_code == 401
 
-    # The freshly issued token still works.
-    again = await client.post("/api/v1/auth/refresh", json={"refresh_token": new_refresh})
-    assert again.status_code == 200
+
+@pytest.mark.asyncio
+async def test_reusing_a_retired_refresh_token_drops_every_session(client, register_payload):
+    """Rotation alone does not protect the victim of a stolen token.
+
+    Whoever presents the token first wins the race and walks off with a valid
+    new pair; the other party just sees one failed refresh and logs in again,
+    none the wiser. So a second use is read as proof the token leaked, and
+    every outstanding session is dropped — including the pair the thief just
+    minted. Without this, the theft is silent and permanent.
+    """
+    tokens = await _register_login(client, register_payload)
+    stolen = tokens["refresh_token"]
+
+    # The thief gets there first and receives a working pair.
+    thief = await client.post("/api/v1/auth/refresh", json={"refresh_token": stolen})
+    assert thief.status_code == 200
+    thief_refresh = thief.json()["refresh_token"]
+
+    # The real user then presents the same token — the tell-tale second use.
+    victim = await client.post("/api/v1/auth/refresh", json={"refresh_token": stolen})
+    assert victim.status_code == 401
+
+    # The thief's token dies with it.
+    after = await client.post("/api/v1/auth/refresh", json={"refresh_token": thief_refresh})
+    assert after.status_code == 401, "the stolen session survived reuse detection"
+
+
+@pytest.mark.asyncio
+async def test_logging_in_again_works_after_a_session_drop(client, register_payload):
+    """Revocation must not lock the legitimate user out permanently.
+
+    A counter, not a timestamp, is what makes this safe: the new token carries
+    the bumped generation, so it cannot be caught by the revocation that
+    preceded it — which is exactly what one-second ``iat`` resolution would
+    have done.
+    """
+    tokens = await _register_login(client, register_payload)
+    stolen = tokens["refresh_token"]
+    await client.post("/api/v1/auth/refresh", json={"refresh_token": stolen})
+    await client.post("/api/v1/auth/refresh", json={"refresh_token": stolen})  # triggers the drop
+
+    fresh = await client.post("/api/v1/auth/login", json=register_payload)
+    assert fresh.status_code == 200
+    revived = await client.post(
+        "/api/v1/auth/refresh", json={"refresh_token": fresh.json()["refresh_token"]}
+    )
+    assert revived.status_code == 200, "a fresh login was caught by an earlier revocation"
 
 
 @pytest.mark.asyncio
