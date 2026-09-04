@@ -4,6 +4,10 @@ on:
   push:
     branches: [main, master]
   pull_request:
+  # Lets the full pipeline be re-run from the Actions tab without an empty
+  # commit — useful after a dependency advisory lands, since the audit result
+  # can change with no code change at all.
+  workflow_dispatch:
 
 # Least privilege by default: no job may write to the repository unless it
 # opts in explicitly. A compromised third-party action then cannot push code,
