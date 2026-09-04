@@ -1,0 +1,40 @@
+# GitHub's static analysis engine. Complements the checks in ci.yml: ruff's
+# "S" ruleset (Bandit) catches insecure API usage at the statement level, while
+# CodeQL does inter-procedural taint tracking — it follows untrusted request
+# data through the service layer into a sink, which a linter cannot see.
+name: CodeQL
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  schedule:
+    # Weekly, so a newly published query pattern is applied to code that has
+    # not changed since it was written.
+    - cron: "27 4 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (python)
+    runs-on: ubuntu-latest
+    permissions:
+      # Required to upload the SARIF results to the Security tab.
+      security-events: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: python
+          queries: security-and-quality
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:python"

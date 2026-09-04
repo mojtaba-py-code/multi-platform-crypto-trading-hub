@@ -1,0 +1,25 @@
+# Line endings are normalised to LF in the repository and checked out native.
+# Without this, a Windows clone commits CRLF and the files below break on the
+# Linux runners that execute them.
+* text=auto
+
+# These are read by a shell, make, or Docker — a CR at the end of a line is a
+# syntax error or an unrunnable command, so they stay LF everywhere.
+*.sh        text eol=lf
+Makefile    text eol=lf
+Dockerfile  text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+*.toml      text eol=lf
+*.cfg       text eol=lf
+*.ini       text eol=lf
+*.mako      text eol=lf
+.env.example text eol=lf
+deploy/nginx.conf text eol=lf
+
+# Keep binaries out of diff/merge processing.
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+*.pdf binary

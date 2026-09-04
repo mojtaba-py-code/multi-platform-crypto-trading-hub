@@ -1,0 +1,66 @@
+name: Bug report
+description: Something behaves incorrectly.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Security issue?** Close this and
+        [report it privately](https://github.com/mojtaba-py-code/multi-platform-crypto-trading-hub/security/advisories/new)
+        instead.
+
+        **Never paste an API key, secret, JWT, or `.env` file into an issue.**
+        Redact them before you post.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you expected, and what happened instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. POST /api/v1/...
+        2. ...
+        3. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log output or traceback
+      description: Redact anything sensitive. This is rendered as code — no backticks needed.
+      render: shell
+
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      placeholder: "1.0.0, or the commit SHA"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Trading mode
+      options:
+        - Paper (ALLOW_LIVE_TRADING=false — the default)
+        - Live, testnet
+        - Live, mainnet
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      placeholder: "Python 3.12 on Ubuntu 24.04 / Docker Compose / Windows 11"
+    validations:
+      required: true

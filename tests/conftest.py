@@ -1,20 +1,29 @@
 """Shared pytest fixtures.
 
 Environment is configured *before* any application module is imported so the
-cached settings singleton picks up the test database and deterministic keys.
+cached settings singleton picks up the test database and the generated keys.
 """
 
 from __future__ import annotations
 
 import os
+import secrets
+
+from cryptography.fernet import Fernet
 
 # --- Test environment (must precede app imports) ---------------------------
 os.environ.setdefault("APP_ENV", "development")
 os.environ.setdefault("APP_DEBUG", "false")
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
-# Deterministic keys so tokens/ciphertext are stable within a run.
-os.environ.setdefault("MASTER_ENCRYPTION_KEY", "0FwqA3vE8m2K4rN6sT9uW1xZ3bD5gH7jK9mP1qS4uV8=")
-os.environ.setdefault("JWT_SECRET_KEY", "test-secret-key-that-is-long-enough-1234567890")
+# Keys are generated once per session, here, before the settings singleton is
+# built — so they are fixed for the whole run (ciphertext written by one test is
+# readable by the next) without a key-shaped literal ever entering the
+# repository. A committed key is indistinguishable from a leaked one to a
+# scanner, and copy-pasting one into a real .env is a mistake worth designing
+# out. ``cryptography`` and ``secrets`` are safe to import here; an ``app``
+# import would cache the settings before the environment is ready.
+os.environ.setdefault("MASTER_ENCRYPTION_KEY", Fernet.generate_key().decode("ascii"))
+os.environ.setdefault("JWT_SECRET_KEY", secrets.token_urlsafe(48))
 os.environ.setdefault("ALLOW_LIVE_TRADING", "false")
 
 from collections.abc import AsyncIterator  # noqa: E402

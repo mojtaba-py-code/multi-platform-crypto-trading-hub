@@ -1,0 +1,28 @@
+# Automated dependency updates. Security patches for a crypto-trading service
+# are not optional: an unpatched CVE in the HTTP or crypto stack is a direct
+# route to the API keys this application stores.
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    labels: ["dependencies"]
+    groups:
+      # One PR for routine bumps keeps the queue reviewable; security updates
+      # still arrive as their own PRs.
+      python-minor-and-patch:
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    labels: ["dependencies", "ci"]
+
+  - package-ecosystem: docker
+    directory: "/"
+    schedule:
+      interval: weekly
+    labels: ["dependencies", "docker"]

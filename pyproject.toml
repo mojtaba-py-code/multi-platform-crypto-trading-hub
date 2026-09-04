@@ -38,6 +38,10 @@ dev = [
     "ruff>=0.5",
     "mypy>=1.10",
     "types-redis",
+    # Used by tests/test_repo_hygiene.py to parse the shipped compose and
+    # workflow files. Installed transitively anyway, but the tests depend on it
+    # directly, so it is declared directly.
+    "pyyaml>=6.0",
 ]
 
 [tool.setuptools.packages.find]

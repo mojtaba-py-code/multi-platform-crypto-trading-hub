@@ -1,5 +1,12 @@
 # Multi-Platform Cryptocurrency Trading Hub
 
+[![CI](https://github.com/mojtaba-py-code/multi-platform-crypto-trading-hub/actions/workflows/ci.yml/badge.svg)](https://github.com/mojtaba-py-code/multi-platform-crypto-trading-hub/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/mojtaba-py-code/multi-platform-crypto-trading-hub/actions/workflows/codeql.yml/badge.svg)](https://github.com/mojtaba-py-code/multi-platform-crypto-trading-hub/actions/workflows/codeql.yml)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
+[![Coverage 95%](https://img.shields.io/badge/coverage-95%25-brightgreen.svg)](#development)
+[![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-261230.svg)](https://github.com/astral-sh/ruff)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
 A unified, security-first platform to manage cryptocurrency trading across
 multiple exchanges from a single API and dashboard. Built with FastAPI, async
 SQLAlchemy, PostgreSQL, Redis and Celery, following clean architecture and
@@ -104,7 +111,10 @@ docker compose up --build
 ```
 
 This starts PostgreSQL, Redis, the API, a Celery worker, the scheduler, and an
-Nginx reverse proxy on port 80.
+Nginx reverse proxy. Every port is published on `127.0.0.1` only — the
+development database is not exposed to the network you happen to be on. It is a
+development stack; for a real deployment see
+[`docs/deployment.md`](docs/deployment.md).
 
 ---
 
@@ -185,6 +195,39 @@ celery -A app.workers.celery_app.celery beat   --loglevel=info
 
 ---
 
+## Security
+
+Full detail in [`docs/security.md`](docs/security.md); reporting policy in
+[`SECURITY.md`](SECURITY.md). In summary:
+
+| Concern | Control |
+| --- | --- |
+| Exchange credentials at rest | Fernet (AES-128-CBC + HMAC-SHA256), rotatable master key; plaintext never reaches the database |
+| Passwords | Argon2id (64 MiB, t=3), hashed off the event loop, rehashed transparently on upgrade |
+| Sessions | Short-lived JWT access tokens; refresh tokens single-use, rotated, revocable |
+| Two-factor | TOTP with the accepted time step recorded, so a code cannot be replayed |
+| Brute force | Per-account lockout (Redis-backed across replicas) plus a per-IP rate limit |
+| Accidental disclosure | Log processor redacts sensitive keys; credentials have a scrubbing `__repr__`; 500s never leak internals |
+| Unsafe deployment | Production refuses to start without a master key, a ≥ 32-char JWT secret, `APP_DEBUG=false`, and a non-wildcard CORS allow-list |
+| Live trading | Off by default, enforced at one choke point, testnet-first when enabled |
+
+Every push and pull request must pass, in addition to the test suite:
+
+- **gitleaks** over the full commit history *and* the working tree, with matches
+  redacted from the build log
+- **pip-audit** (`--strict`) against the Python Packaging Advisory Database
+- **CodeQL** (`security-and-quality`) for inter-procedural taint analysis
+- **ruff** with the `S` (Bandit) ruleset, and **mypy**
+
+Dependabot proposes weekly updates for pip, GitHub Actions, and Docker base images.
+
+No secret — real or disposable — is committed anywhere in this repository. CI
+generates the keys it needs at run time, and
+[`tests/test_repo_hygiene.py`](tests/test_repo_hygiene.py) fails the build if
+that stops being true.
+
+---
+
 ## Documentation
 
 - [Architecture](docs/architecture.md)
@@ -213,6 +256,15 @@ tests/          unit + integration tests
 ```
 
 ---
+
+## Contributing
+
+Bug reports and pull requests are welcome — see
+[`CONTRIBUTING.md`](CONTRIBUTING.md) for the workflow and the safety rules a
+change has to respect.
+
+**Found a security problem? Do not open a public issue.** Follow
+[`SECURITY.md`](SECURITY.md).
 
 ## Disclaimer
 

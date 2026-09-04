@@ -1,0 +1,36 @@
+# gitleaks configuration.
+#
+# The upstream rule set is used in full. This file adds nothing to it and
+# disables none of it; it only records the handful of strings in this repository
+# that resemble credentials to a scanner but are not, so that the scan is
+# deterministic instead of depending on an entropy threshold.
+#
+# Every entry is an exact literal or a tightly-anchored pattern. A real
+# credential added on the line next to one of them is still reported. Anything
+# that is genuinely key material is generated at run time and never committed —
+# see tests/conftest.py and the CI workflow.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Reviewed non-secrets: test fixtures and one deliberate constant."
+regexTarget = "match"
+regexes = [
+  # tests/test_production_guardrails.py — proves the production start-up gate
+  # accepts a >= 32 character JWT secret. The value is an English sentence.
+  '''a-production-jwt-secret-that-is-long-enough''',
+
+  # tests/test_security.py — signing key for a TokenService round-trip test.
+  # Its tail is the alphabet, in order.
+  '''unit-test-secret-key-abcdefghijklmnop''',
+
+  # app/services/auth_service.py — hashed once and verified against whenever an
+  # unknown email is submitted, so login timing cannot reveal whether an account
+  # exists. It is a constant, and it is meant to be public.
+  '''decoy-password-for-constant-time-auth''',
+
+  # tests/ — synthetic plaintext inputs used to assert that exchange credentials
+  # are encrypted before they reach the database.
+  '''(AK|SK|pp)-live(-[0-9a-f]{1,8})?''',
+]
