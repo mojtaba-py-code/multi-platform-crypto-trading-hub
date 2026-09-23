@@ -33,7 +33,16 @@ jobs:
         uses: github/codeql-action/init@v3
         with:
           languages: python
-          queries: security-and-quality
+          # The default suite, which is every security query. The quality half
+          # of security-and-quality was the only thing this repository ran that
+          # the others do not, and all 25 alerts it raised were false: the `...`
+          # bodies of @abstractmethod declarations read as ineffectual
+          # statements, Alembic's required revision globals as unused, an import
+          # guarded by TYPE_CHECKING as a runtime cycle, and alembic/env.py's
+          # deliberate model import — already marked `# noqa: F401`, and
+          # load-bearing, since dropping it breaks autogenerate silently.
+          # Keeping them would train the eye to scroll past this tab, which is
+          # the one place a real finding has to be noticed.
 
       - name: Perform CodeQL analysis
         uses: github/codeql-action/analyze@v3
