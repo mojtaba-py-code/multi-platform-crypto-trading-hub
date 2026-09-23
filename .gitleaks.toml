@@ -33,4 +33,14 @@ regexes = [
   # tests/ — synthetic plaintext inputs used to assert that exchange credentials
   # are encrypted before they reach the database.
   '''(AK|SK|pp)-live(-[0-9a-f]{1,8})?''',
+
+  # tests/conftest.py as it stood at 77c69667 (2026-08-06). The fixtures were
+  # literals then and are generated per session now, but the scan reads the
+  # history, so the two values are still reachable and still reported. Neither
+  # ever authenticated anything: the first is a Fernet-shaped constant typed by
+  # hand, the second an English sentence with a counting tail. Listed rather
+  # than rewritten out of the history, which would renumber every commit and
+  # break every permalink to fix a finding that is not a leak.
+  '''0FwqA3vE8m2K4rN6sT9uW1xZ3bD5gH7jK9mP1qS4uV8=''',
+  '''test-secret-key-that-is-long-enough-1234567890''',
 ]
