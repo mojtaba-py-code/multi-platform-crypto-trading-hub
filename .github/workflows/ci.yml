@@ -112,8 +112,11 @@ jobs:
 
       # Fails the build on any dependency with a known CVE in the Python
       # Packaging Advisory Database.
+      # --skip-editable: the environment contains this project, installed with
+      # -e, and pip-audit cannot look it up on PyPI. Under --strict a package it
+      # cannot audit is an error, so the job failed on its own source tree.
       - name: Audit installed packages (pip-audit)
-        run: pip-audit --strict --progress-spinner off
+        run: pip-audit --strict --skip-editable --progress-spinner off
 
       # The environment above is resolved from the ranges in pyproject.toml.
       # What actually ships is the pinned lock, so audit that too — a CVE in a

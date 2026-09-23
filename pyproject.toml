@@ -52,6 +52,12 @@ include = ["app*"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+# The suite imports its own helpers as ``tests.fakes``. Bare ``pytest``
+# prepends the directory holding conftest.py, not the project root, so the
+# package is unimportable and every run dies in conftest — but only where
+# the command is ``pytest``. ``python -m pytest`` adds the working
+# directory and hides it, which is why this passed locally and failed in CI.
+pythonpath = ["."]
 addopts = "-ra -q"
 filterwarnings = ["ignore::DeprecationWarning"]
 
