@@ -164,7 +164,7 @@ pydantic-core==2.46.5
     # via pydantic
 pydantic-settings==2.15.0
     # via crypto-trading-hub (pyproject.toml)
-pyjwt==2.13.0
+pyjwt==2.15.1
     # via crypto-trading-hub (pyproject.toml)
 pyotp==2.10.0
     # via crypto-trading-hub (pyproject.toml)
