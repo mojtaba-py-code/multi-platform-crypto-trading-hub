@@ -60,7 +60,7 @@ attrs==26.1.0
     #   ccxt
 billiard==4.2.4
     # via celery
-ccxt==4.5.77
+ccxt==4.5.85
     # via crypto-trading-hub (pyproject.toml)
 celery==5.6.3
     # via crypto-trading-hub (pyproject.toml)
@@ -218,7 +218,7 @@ tzdata==2026.3
     #   tzlocal
 tzlocal==5.4.4
     # via celery
-urllib3==2.7.0
+urllib3==2.8.0
     # via
     #   ccxt
     #   requests
