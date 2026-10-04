@@ -135,7 +135,7 @@ mako==1.4.1
     # via alembic
 markupsafe==3.0.3
     # via mako
-multidict==6.7.1
+multidict==7.0.0
     # via
     #   aiohttp
     #   ccxt
