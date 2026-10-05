@@ -23,6 +23,10 @@ updates:
       interval: weekly
     cooldown:
       default-days: 7
+    groups:
+      # One PR for every action: CodeQL's init and analyze must move together.
+      actions:
+        patterns: ["*"]
     labels: ["dependencies", "ci"]
 
   - package-ecosystem: docker
