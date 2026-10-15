@@ -59,11 +59,11 @@ attrs==26.1.0
     #   ccxt
 billiard==4.3.0
     # via celery
-ccxt==4.5.85
+ccxt==4.5.88
     # via crypto-trading-hub (pyproject.toml)
 celery==5.6.3
     # via crypto-trading-hub (pyproject.toml)
-certifi==2026.6.17
+certifi==2026.7.22
     # via
     #   ccxt
     #   httpcore
@@ -134,7 +134,7 @@ mako==1.4.3
     # via alembic
 markupsafe==3.0.4
     # via mako
-multidict==6.7.1
+multidict==6.9.1
     # via
     #   aiohttp
     #   ccxt
