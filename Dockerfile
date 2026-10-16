@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # ---- Builder: install dependencies into a virtualenv ----------------------
-FROM python:3.12-slim AS builder
+FROM python:3.14-slim AS builder
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -21,7 +21,7 @@ COPY pyproject.toml requirements.txt ./
 RUN pip install --upgrade pip && pip install -r requirements.txt
 
 # ---- Runtime: minimal image, non-root user --------------------------------
-FROM python:3.12-slim AS runtime
+FROM python:3.14-slim AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
