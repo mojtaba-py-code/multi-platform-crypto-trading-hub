@@ -22,7 +22,7 @@ aiohappyeyeballs==2.7.1
     # via
     #   aiohttp
     #   ccxt
-aiohttp==3.14.3
+aiohttp==3.14.4
     # via
     #   aiohttp-fast-zlib
     #   ccxt
